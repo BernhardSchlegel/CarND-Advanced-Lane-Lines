@@ -42,14 +42,6 @@ Rubric points I considered can be found [here](https://review.udacity.com/#!/rub
 
 ### Camera Calibration
 
-#### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
-
-The code for this step is contained in the first code cell of the IPython notebook located in "real.ipny" at the very top.  
-
-I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
-
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result:
-
 
 ### Pipeline (single images)
 
@@ -58,6 +50,12 @@ Just for reference, the original images looks like this:
 ![test](./writeup/01_original.png)
 
 #### 1. Undistorting
+
+The code for this step is contained in the first code cell of the IPython notebook located in "real.ipny" at the very top.  
+
+I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+
+I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result:
 
 To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
 
@@ -73,17 +71,33 @@ undistorted image. The image from above looks like this after being undistorted:
 The code for my perspective transform includes a function called `warp()`, which appears in the 6th code cell of the IPython notebook.  The `warp()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
 
 ```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
+x_plot = [distance_x_close, distance_x_far, im_width - distance_x_far, im_width - distance_x_close]
+x_plot.append(x_plot[0])
+y_plot = [px_y_close, px_y_far, px_y_far, px_y_close]
+y_plot.append(y_plot[0])
+src = []
+for i, (x, y) in enumerate(zip(x_plot, y_plot)):
+    if i > 3:
+        # not used for warping, just for visualization
+        break
+    src.append([x, y])
+
+dst_size_image = distance_x_far
+x_dst = [distance_x_close, distance_x_close, im_width - distance_x_close, im_width - distance_x_close]
+y_dst = [im_height, 0, 0,  im_height]
+dst = []
+for (x, y) in zip(x_dst, y_dst):
+    dst.append([x, y])
 ```
+
+The code represents my visual process, that is pictured in the image below. The
+area marked by the red line is transformed into birds-eye view. I used the
+whole width of the street to ensure that lanes are found, even if the car is
+close to the edge of the lane. To identify the right transformation, I used
+a "`straight_line_.*`" image. I made sure, that the warped lines also were
+straight (parallel).
+
+![test](./writeup/03_bird_eye_2.png)
 
 This resulted in the following source and destination points:
 
@@ -94,45 +108,93 @@ This resulted in the following source and destination points:
 | 1127, 720     | 960, 720      |
 | 695, 460      | 960, 0        |
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+The test image from above looks like this
 
 ![test](./writeup/03_bird_eye.png)
 
-#### Binarizing
+#### 3. Binarizing
 
-I used a combination of color (L channel of HLS color space) and gradient thresholds (using sobel X) to generate a binary image. Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of S (S channel of HLS color space) and gradient thresholds (using sobel X) to generate a binary image. Here's an example of my output for this step.  (note: this is not actually from one of the test images)
 
 ![test](./writeup/04_binarized_birdeye.png)
 
 
-#### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
+#### 4. Line/Lane finding
 
 Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
 
 ![alt text][image5]
 
-#### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
+A little more precise: I used a convolutional histogram over 8 slices (in the
+vertical direction): For every slice I calculated the convolved center (centroid). After
+that, I defined an area around it, where hot (=lane) pixels are allowed to be
+in order to be recognozied. The more pixels in slices "away" from the car were
+found, the more "trust" the pipeline had in the result.   
 
-I did this in lines # through # in my code in `my_other_file.py`
+Allowed areas in the example image from above are e.g. :
+![test](./writeup/05_convoled_areas.png)
 
-#### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
+So the subset of all pixels from the left line and the allowed area are e.g. those:
+![test](./writeup/06_left_line.png)
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+#### 5. Calculating curvature of the lane and the position of the vehicle with respect to center
 
-![alt text][image6]
+Given the hot pixels from above, I fitted a second order polynomial onto the pixels.
+This result into a curvature (dimension pixels). To get the real world curvature
+in meters, I multiplied this value by those two values
+
+    ym_per_pix = 30/720 # meters per pixel in y  
+    xm_per_pix = 3.7/700 # meters per pixel in x dimension
+
+I did this in cell 16.
+
+**Enhancement**: Weighting the points before fitting the polynomial improved the
+performance: The closer to the car, and the further away from the edge of warped
+image a pixels was, the more weight was used. E.g. this was the weight I used for
+the left pixels (`base_trust` is a constant offset):
+F
+     left_weights = lefty / np.max(lefty) + leftx / np.max(leftx) + base_trust
+
+After the painting this onto the example image, the image looked like this:
+![test](./writeup/06_warped_painted.png
+
+If a lane was recognized, the coefficients of the 2nd order polynomial were added
+to a list for smoothing. The average of this array was used for plotting.
+
+#### 6. Transforming back and rendering
+
+After using the inversed warping matrix, the image from above looked like this
+
+![test](./writeup/08_painted_warped_back.png)
+
+I combined this image with the original image. The result looked like:
+![test](./writeup/09_merged_into_orignal.png)
+
+And added some text:
+
+![test](./writeup/10_text.png)
+
 
 ---
 
 ### Pipeline (video)
 
-#### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
+#### 1. Video
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./output/project_video.mp4)
+
 
 ---
 
 ### Discussion
 
-#### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
+Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further ("If I had more **time**"):
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+- **Implement object orientation**: Represent everything with objects, not only
+the line. Enhance the line using methods and attributes.
+- Do experiments with different thresholding levels for binarizing. If one fails, maybe
+try the other.
+- Do some weighted averaging of the polynomials in dependence on the "trust" of
+the last found points.
+- Dont discard the last points: Shift them (in dependence of the speed) to the car
+and use them (e.g. with a lower weight) again for the next image.
