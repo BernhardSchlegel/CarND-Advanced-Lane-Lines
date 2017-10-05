@@ -1,13 +1,4 @@
-## Writeup Template
-
-### You can use this file as a template for your writeup if you want to submit it as a markdown file, but feel free to use some other method and submit a pdf if you prefer.
-
-
-Improvements
-
-- Add a weight (closest ce)
-- convolutional sliding window search
-- cvw continues with the same delta, if no pixels were found
+## Writeup / README
 
 ---
 
@@ -37,8 +28,6 @@ The goals / steps of this project are the following:
 Rubric points I considered can be found [here](https://review.udacity.com/#!/rubrics/571/view).
 
 ---
-
-### Writeup / README
 
 ### Camera Calibration
 
