@@ -114,10 +114,15 @@ The test image from above looks like this
 
 #### 3. Binarizing
 
-I used a combination of S (S channel of HLS color space) and gradient thresholds (using sobel X) to generate a binary image. Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+I used a combination of S and L channel of HLS color space and gradient thresholds (using sobel X) to generate a binary image. Here's an example of my output for this step.  (note: this is not actually from one of the test images)
 
 ![test](./writeup/04_binarized_birdeye.png)
 
+Details of different Binarizing possibilities are displayed below.
+
+![test](./writeup/04_binarized_detail.png)
+
+As I said: I used S and L channel and did a Sobel X on it.
 
 #### 4. Line/Lane finding
 
